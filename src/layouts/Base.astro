@@ -7,7 +7,7 @@ const { title = "Mona's Bookmark Manager App" } = Astro.props;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
-    <style>
+    <style is:global>
       /* Monaspace webfonts (GitHub Next, SIL OFL 1.1) self-hosted from /public/fonts.
          Neon carries body text; Xenon gives headings a touch of contrast.
          Self-hosting keeps the app fully offline-capable — no runtime CDN needed;
@@ -48,23 +48,30 @@ const { title = "Mona's Bookmark Manager App" } = Astro.props;
         src: url('/fonts/MonaspaceXenon-700.woff2') format('woff2');
       }
       :root {
-        color-scheme: light dark;
-        --accent: #3b82f6;
-        --border: #8883;
+        color-scheme: light;
+        --accent: #315fca;
+        --border: #d7dfeb;
         --muted: color-mix(in srgb, currentColor 60%, transparent);
         --radius: 0.6rem;
         --font-body: 'Monaspace Neon', ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
         --font-head: 'Monaspace Xenon', 'Monaspace Neon', ui-monospace, monospace;
       }
       * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
+      html { min-height: 100%; background: #f3f6fb; color: #18263d; }
       body {
         font-family: var(--font-body);
         line-height: 1.5;
-        max-width: 40rem;
+        max-width: 58rem;
         margin: 0 auto;
-        padding: 2.5rem 1.25rem 4rem;
+        padding: 4rem 1.5rem;
       }
       header { margin-bottom: 1.5rem; }
+      main { padding: 1.75rem; border: 1px solid var(--border); border-radius: 1.25rem; background: #fff; box-shadow: 0 12px 40px #2034510a; }
+      .bookmark-label { flex: 1 1 18rem; min-width: 0; overflow-wrap: anywhere; }
+      .bookmark a { color: #234faa; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+      #feedback { min-height: 1.5em; font-size: .85rem; color: #334d70; }
+      @media (max-width: 600px) { body { padding: 2rem 1rem; } main { padding: 1rem; } h1 { font-size: 1.45rem; } }
       h1 { margin: 0 0 0.25rem; font-size: 1.75rem; font-family: var(--font-head); letter-spacing: -0.01em; }
       .tagline { margin: 0; color: var(--muted); }
 
