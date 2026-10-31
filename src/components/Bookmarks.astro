@@ -1,70 +1,127 @@
 ---
-// Bookmarks component (scaffold).
-//
-// The markup below renders during the static build. The dynamic behavior —
-// adding a bookmark, generating a short slug, and persisting to the browser —
-// must run ONLY in the client-side <script> boundary at the bottom of this
-// file. Astro runs that script in the browser, never during the build, so
-// browser-only APIs are safe there.
-//
-// You will implement the behavior in Step 3.
+ // Browser storage is accessed only within the client <script> below.
 ---
 <form id="add-bookmark">
   <div class="field">
     <label for="url">Link to save</label>
-    <input
-      id="url"
-      name="url"
-      type="text"
-      inputmode="url"
-      autocomplete="off"
-      spellcheck="false"
-      placeholder="https://example.com"
-      required
-    />
+    <input id="url" name="url" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://example.com" required aria-describedby="feedback" />
   </div>
   <button type="submit">Add bookmark</button>
 </form>
-
 <p class="hint">Paste a URL and select <strong>Add bookmark</strong> to generate its short <code>mona-</code> slug.</p>
-
-<p id="empty-state" class="empty">No bookmarks yet — add your first link above.</p>
-
+<p id="empty-state" class="empty">No bookmarks yet - add your first link above.</p>
 <div id="list-header" hidden>
   <h2 class="list-title">Saved bookmarks</h2>
   <button id="clear-all" type="button" class="clear">Clear all</button>
 </div>
-
-<ul id="bookmark-list" aria-label="Saved bookmarks" aria-live="polite">
-  <!-- Bookmarks render here in the browser. -->
-</ul>
+<ul id="bookmark-list" aria-label="Saved bookmarks" aria-live="polite"></ul>
+<p id="feedback" role="status" aria-live="polite"></p>
+<noscript>Enable JavaScript to save bookmarks on this device.</noscript>
 
 <script>
-  // CLIENT-SIDE BOUNDARY — runs in the browser only.
-  //
-  // TODO (Step 3): implement the bookmarks feature here.
-  //   1. On form submit, call event.preventDefault() FIRST so the page
-  //      never reloads, then read and validate the original URL.
-  //   2. Generate a short slug with a "mona-" prefix (for example, base62
-  //      of a counter or hash → "mona-7fk2").
-  //   3. Save the original URL and its slug, then persist them in the browser.
-  //   4. Render each saved bookmark into #bookmark-list as a row (li.bookmark) with:
-  //        - the original URL as a link (.url) that opens in a new tab,
-  //        - its short slug shown as a badge (.slug), and
-  //        - a "Copy" button (.copy) that copies the slug.
-  //   5. Toggle empty vs. saved state: hide #empty-state and show #list-header
-  //      (the "Saved bookmarks" heading + "Clear all" button) once at least one
-  //      bookmark exists; reverse it when the list is empty.
-  //   6. Wire the #clear-all button to remove every saved bookmark (clear the
-  //      list, clear browser storage) after a quick confirm.
-  //   7. On page load, read the saved bookmarks from storage and render
-  //      them so the list persists across reloads.
-  //
-  // Because this code lives in a client <script>, browser storage APIs are
-  // safe to use here without breaking the static build.
-  const form = document.getElementById('add-bookmark');
-  form?.addEventListener('submit', (event) => {
-    event.preventDefault(); // keep this — stops the page from reloading
-    // Implement in Step 3.
+  import { normalizeUrl, loadBookmarks, nextSlug, formatBookmark, type Bookmark } from '../lib/bookmarks';
+
+  const STORAGE_KEY = 'mona-bookmarks';
+  const form = document.querySelector<HTMLFormElement>('#add-bookmark')!;
+  const input = document.querySelector<HTMLInputElement>('#url')!;
+  const list = document.querySelector<HTMLUListElement>('#bookmark-list')!;
+  const empty = document.querySelector<HTMLElement>('#empty-state')!;
+  const header = document.querySelector<HTMLElement>('#list-header')!;
+  const feedback = document.querySelector<HTMLElement>('#feedback')!;
+  const clear = document.querySelector<HTMLButtonElement>('#clear-all')!;
+  let bookmarks: Bookmark[] = [];
+  let hasUnsavedChanges = false;
+
+  function readSaved() {
+    if (hasUnsavedChanges) return;
+    try { bookmarks = loadBookmarks(localStorage.getItem(STORAGE_KEY)); }
+    catch { feedback.textContent = 'Browser storage is unavailable. Links will stay here only until you close or reload this page.'; }
+  }
+
+  function persist(): boolean {
+    try {
+      if (bookmarks.length) localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
+      else localStorage.removeItem(STORAGE_KEY);
+      hasUnsavedChanges = false;
+      return true;
+    } catch {
+      hasUnsavedChanges = true;
+      feedback.textContent = 'Could not save this change to browser storage. It is available only in this tab until you reload.';
+      return false;
+    }
+  }
+
+  function render() {
+    list.replaceChildren();
+    empty.hidden = bookmarks.length > 0;
+    header.hidden = bookmarks.length === 0;
+    for (const bookmark of bookmarks) {
+      const row = document.createElement('li');
+      row.className = 'bookmark';
+      const label = document.createElement('span');
+      label.className = 'bookmark-label';
+      label.setAttribute('aria-label', formatBookmark(bookmark));
+      const link = document.createElement('a');
+      link.className = 'url';
+      link.href = bookmark.url;
+      link.textContent = bookmark.url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      const slug = document.createElement('span');
+      slug.className = 'slug';
+      slug.textContent = bookmark.slug;
+      label.append(link, document.createTextNode(' :: '), slug);
+      const copy = document.createElement('button');
+      copy.type = 'button';
+      copy.className = 'copy';
+      copy.textContent = 'Copy';
+      copy.setAttribute('aria-label', 'Copy ' + bookmark.slug);
+      copy.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(bookmark.slug);
+          feedback.textContent = 'Copied ' + bookmark.slug + '.';
+        } catch { feedback.textContent = 'Clipboard unavailable. Select and copy this slug: ' + bookmark.slug; }
+      });
+      row.append(label, copy);
+      list.append(row);
+    }
+  }
+
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    feedback.textContent = '';
+    const url = normalizeUrl(input.value);
+    if (!url) {
+      input.setAttribute('aria-invalid', 'true');
+      feedback.textContent = 'Enter a valid HTTP or HTTPS URL, such as example.com. Links with embedded credentials are not supported.';
+      input.focus();
+      return;
+    }
+    input.removeAttribute('aria-invalid');
+    readSaved();
+    bookmarks.push({ url, slug: nextSlug(bookmarks) });
+    const saved = persist();
+    render();
+    if (saved) feedback.textContent = 'Bookmark saved on this device.';
+    form.reset();
+    input.focus();
   });
+
+  clear.addEventListener('click', () => {
+    if (!window.confirm('Clear all saved bookmarks on this device?')) return;
+    bookmarks = [];
+    const saved = persist();
+    render();
+    if (saved) feedback.textContent = 'All bookmarks cleared.';
+    input.focus();
+  });
+
+  window.addEventListener('storage', event => {
+    if (event.key === STORAGE_KEY || event.key === null) {
+      readSaved();
+      render();
+    }
+  });
+  readSaved();
+  render();
 </script>
